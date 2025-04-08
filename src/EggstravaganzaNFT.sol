@@ -12,9 +12,7 @@ contract EggstravaganzaNFT is ERC721, Ownable {
     uint256 public totalSupply;
 
     /// @notice Constructor initializes the ERC721 token with a name and symbol.
-    constructor(string memory _name, string memory _symbol)
-        ERC721(_name, _symbol) Ownable(msg.sender)
-    {}
+    constructor(string memory _name, string memory _symbol) ERC721(_name, _symbol) Ownable(msg.sender) {}
 
     /// @notice Only the owner can set the game contract allowed to mint eggs.
     function setGameContract(address _gameContract) external onlyOwner {
