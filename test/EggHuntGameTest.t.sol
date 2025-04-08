@@ -257,7 +257,63 @@ contract EggGameTest is Test {
     }
 
     //AUDIT TESTS
-    function testDepositEggExploit() public {
+    function testEndGameExploit() public {
+        // Start the game properly.
+        uint256 currentTime = block.timestamp;
+        game.startGame(100);
+        // Check that the game is active and times are set.
+        assertTrue(game.gameActive());
+        assertEq(game.startTime(), currentTime);
+        assertEq(game.endTime(), currentTime + 100);
+
+        // Verify game status while active.
+        string memory status = game.getGameStatus();
+        assertEq(status, "Game is active");
+
+        // Warp time to after the game duration.
+        vm.warp(currentTime + 101);
+        status = game.getGameStatus();
+        // Even though the game is still marked active, the status reflects time elapsed.
+        assertEq(status, "Game time elapsed");
+
+        // End the game.
+        game.endGame();
+        assertFalse(game.gameActive());
+        status = game.getGameStatus();
+        assertEq(status, "Game is not active");
+    }
+
+    function testSpoofedDepositorExploit() public {
+        // Mint an egg by simulating a call from the game contract.
+        vm.prank(address(game));
+        bool success = nft.mintEgg(alice, 1);
+        assertTrue(success);
+        // Check that token 1 is owned by alice.
+        assertEq(nft.ownerOf(1), alice);
+        // Verify that the totalSupply counter increments.
+        assertEq(nft.totalSupply(), 1);
+
+        //Transger egg to vault
+        vm.prank(alice);
+        nft.approve(address(vault), 1);
+        vm.prank(alice);
+        nft.transferFrom(address(alice), address(vault), 1);
+
+        // Deposit the egg into the vault.
+        vm.prank(bob);
+        vault.depositEgg(1, bob);
+        // The egg should now be marked as deposited.
+        assertTrue(vault.isEggDeposited(1));
+        // The depositor recorded should be alice, but the vault allows for anyone to input depositor
+        assertEq(vault.eggDepositors(1), bob);
+
+        // Depositing the same egg again should revert.
+        vm.prank(alice);
+        vm.expectRevert("Egg already deposited");
+        vault.depositEgg(1, alice);
+    }
+
+    function testUnauthorizedWithdrawalsExploit() public {
         // Mint an egg by simulating a call from the game contract.
         vm.prank(address(game));
         bool success = nft.mintEgg(alice, 1);
