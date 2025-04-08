@@ -25,7 +25,7 @@
 </head>
 <body>
 <div class="full-page">
-    <img src="./logo.png" alt="Logo">
+    <img src="./501stAudits.png" alt="Logo">
     <div>
     <h1> Eggstravaganza Audit Report</h1>
     <h3>Version 0.1</h2>
@@ -38,7 +38,7 @@
 </body>
 </html>
 
-<!-- Your report starts here! -->
+<!-- report starts here! -->
 # `Eggstravaganza Audit Report`
 
 Prepared by:
@@ -66,7 +66,7 @@ Assisting Auditors:
   - [Issues found](#issues-found)
 - [Findings](#findings)
   - [High](#high)
-    - [\[H-1\] `<Title>&<What it does>`](#h-1-titlewhat-it-does)
+    - [\[H-1\] Unauthorized Depositor Spoofing/FrontRunning via Public depositEgg() Function](#h-1-unauthorized-depositor-spoofingfrontrunning-via-public-depositegg-function)
   - [Medium](#medium)
     - [\[M-1\] `<Title>&<What it does>`](#m-1-titlewhat-it-does)
   - [Low](#low)
