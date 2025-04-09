@@ -225,7 +225,7 @@ Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 7.60ms (896.43µs C
 
 Then, users can deposit their NFTs securely via the EggHuntGame Function `depositEggToVault`:
 
-```solidity
+```javascript
 eggNFT.safeTransferFrom(msg.sender, address(vault), tokenId);
 ```
 
