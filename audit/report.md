@@ -105,9 +105,9 @@ f83ed7dff700c4319bdfd0dff796f74db5be4538
 
 ```
 src/
-├── EggHuntGame.sol       // Main game contract managing the egg hunt lifecycle and minting process.
-├── EggVault.sol          // Vault contract for securely storing deposited Egg NFTs.
-└── EggstravaganzaNFT.sol // ERC721-style NFT contract for minting unique Egg NFTs.
+#-- EggHuntGame.sol       // Main game contract managing the egg hunt lifecycle and minting process.
+#-- EggVault.sol          // Vault contract for securely storing deposited Egg NFTs.
+#-- EggstravaganzaNFT.sol // ERC721-style NFT contract for minting unique Egg NFTs.
 ```
 
 # Protocol Summary 
@@ -182,7 +182,7 @@ Actors:
 ```bash
 Ran 1 test for test/EggHuntGameTest.t.sol:EggGameTest
 [PASS] testSpoofedDepositorExploit() (gas: 176345)
-Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 7.60ms (896.43µs CPU time)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 7.60ms (896.43us CPU time)
 ```
 
 **Recommended Mitigation:** 
