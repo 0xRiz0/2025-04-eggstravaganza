@@ -1,61 +1,43 @@
-<!DOCTYPE html>
-<html>
-<head>
-<style>
-    .full-page {
-        width:  100%;
-        height:  100vh; /* This will make the div take up the full viewport height */
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-    }
-    .full-page img {
-        max-width:  200;
-        max-height:  200;
-        margin-bottom: 5rem;
-    }
-    .full-page div{
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-    }
-</style>
-</head>
-<body>
-<div class="full-page">
-    <img src="./501stAudits.png" alt="Logo">
-    <div>
-    <h1> Eggstravaganza Audit Report</h1>
-    <h3>Version 1</h2>
-    <h3>0xRiz0</h3>
-    <h4>Date: April 8th, 2025</h4>
-    </div>
-    
-</div>
+---
+title: Eggstravaganza Audit Report
+author: 0xRiz0
+date: April 8th, 2025
+header-includes:
+  - \usepackage{titling}
+  - \usepackage{graphicx}
+---
 
-</body>
-</html>
+\begin{titlepage}
+    \centering
+    \begin{figure}[h]
+        \centering
+        \includegraphics[width=0.5\textwidth]{501stAudits.png} 
+    \end{figure}
+    \vspace*{2cm}
+    {\Huge\bfseries Eggstravaganza Audit Report\par}
+    \vspace{1cm}
+    {\Large Version 1.0\par}
+    \vspace{2cm}
+    {\Large\itshape 0xRiz0\par}
+    \vfill
+    {\large \today\par}
+\end{titlepage}
+
+\maketitle
 
 <!-- report starts here! -->
-# `Eggstravaganza Audit Report`
-
 Prepared by:
-- Shawn Rizo
+- 0xRiz0
 
 Lead Auditor(s):
-- Shawn Rizo
+- 0xRiz0
 
 Assisting Auditors:
 - None
 
-<div style="page-break-after: always;"></div>
-
 # Table of Contents
-- [`Eggstravaganza Audit Report`](#eggstravaganza-audit-report)
 - [Table of Contents](#table-of-contents)
-- [About Shawn Rizo](#about-shawn-rizo)
+- [About 0xRiz0](#about-0xriz0)
 - [Disclaimer](#disclaimer)
 - [Risk Classification](#risk-classification)
 - [Audit Details](#audit-details)
@@ -72,16 +54,14 @@ Assisting Auditors:
     - [\[M-1\] Non-Atomic Deposit Flow in EggHuntGame](#m-1-non-atomic-deposit-flow-in-egghuntgame)
     - [\[M-2\] Unauthorized Withdrawals via Poisoned Depositor Mapping](#m-2-unauthorized-withdrawals-via-poisoned-depositor-mapping)
 
-<div style="page-break-after: always;"></div>
 
-
-# About Shawn Rizo
+# About 0xRiz0
 
 I am a seasoned Smart Contract Engineer, adept at utilizing agile methodologies to deliver comprehensive insights and high-level overviews of blockchain projects. Specialized in developing and deploying decentralized applications (DApps) on Ethereum and EVM compatible chains. Expertise in Solidity, and security auditing, leading to a significant reduction in vulnerabilities through the strategic use of Foundry and Security Tools like Slither and Aderyn.
 
 # Disclaimer
 
-The Riiz0 team makes all effort to find as many vulnerabilities in the code in the given time period, but holds no responsibilities for the the findings provided in this document. A security audit by the team is not an endorsement of the underlying business or product. The audit was time-boxed and the review of the code was solely on the security aspects of the solidity implementation of the contracts.
+The 0xRiz0 team makes all effort to find as many vulnerabilities in the code in the given time period, but holds no responsibilities for the the findings provided in this document. A security audit by the team is not an endorsement of the underlying business or product. The audit was time-boxed and the review of the code was solely on the security aspects of the solidity implementation of the contracts.
 
 # Risk Classification
 
@@ -394,4 +374,3 @@ Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 11.38ms (1.64ms CPU
 +     return this.onERC721Received.selector;
 +   }
 ```
-
