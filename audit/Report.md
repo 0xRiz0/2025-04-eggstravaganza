@@ -28,8 +28,8 @@
     <img src="./501stAudits.png" alt="Logo">
     <div>
     <h1> Eggstravaganza Audit Report</h1>
-    <h3>Version 0.1</h2>
-    <h3>Riiz0</h3>
+    <h3>Version 1</h2>
+    <h3>0xRiz0</h3>
     <h4>Date: April 8th, 2025</h4>
     </div>
     
@@ -53,7 +53,7 @@ Assisting Auditors:
 <div style="page-break-after: always;"></div>
 
 # Table of Contents
-- [`<Name> Audit Report`](#name-audit-report)
+- [`Eggstravaganza Audit Report`](#eggstravaganza-audit-report)
 - [Table of Contents](#table-of-contents)
 - [About Shawn Rizo](#about-shawn-rizo)
 - [Disclaimer](#disclaimer)
@@ -67,16 +67,10 @@ Assisting Auditors:
 - [Findings](#findings)
   - [High](#high)
     - [\[H-1\] Spoofed Depositor via depositEgg()](#h-1-spoofed-depositor-via-depositegg)
-    - [\[H-2\] Unauthorized Withdrawals via Poisoned Depositor Mapping](#h-2-unauthorized-withdrawals-via-poisoned-depositor-mapping)
+    - [\[H-2\] Predictable Randomness in `EggHuntGame`](#h-2-predictable-randomness-in-egghuntgame)
   - [Medium](#medium)
     - [\[M-1\] Non-Atomic Deposit Flow in EggHuntGame](#m-1-non-atomic-deposit-flow-in-egghuntgame)
-    - [\[M-2\] Predictable Randomness in `EggHuntGame`](#m-1-predictable-randomness-in-`egghunthame`)
-  - [Low](#low)
-    - [\[L-1\] Lack of Interface Compliance in EggVault](#l-1-lack-of-interface-compliance-in-eggvault)
-  - [Informational](#informational)
-    - [\[I-1\] `<Title>&<What it does>`](#i-1-titlewhat-it-does)
-  - [Gas](#gas)
-    - [\[G-1\] `<Title>&<What it does>`](#g-1-titlewhat-it-does)
+    - [\[M-2\] Unauthorized Withdrawals via Poisoned Depositor Mapping](#m-2-unauthorized-withdrawals-via-poisoned-depositor-mapping)
 
 <div style="page-break-after: always;"></div>
 
@@ -132,8 +126,8 @@ Actors:
 
 | Severity | Number of issues found |
 | -------- | ---------------------- |
-| High     | 1                      |
-| Medium   | 0                      |
+| High     | 2                      |
+| Medium   | 2                      |
 | Low      | 0                      |
 | Info     | 0                      |
 | Gas      | 0                      |
@@ -253,7 +247,58 @@ Then, users can deposit their NFTs securely via:
 eggNFT.safeTransferFrom(msg.sender, address(vault), tokenId);
 ```
 
-### [H-2] Unauthorized Withdrawals via Poisoned Depositor Mapping
+### [H-2] Predictable Randomness in `EggHuntGame`
+
+**Summary:** The `EggHuntGame` contract utilizes on-chain data to generate random numbers for the `searchForEgg` function. This approach is susceptible to manipulation by miners or validators, leading to unfair outcomes.
+
+**Vulnerability Details:** In the `searchForEgg` function, randomness is derived using the following line:
+```javascript
+uint256 random = uint256(keccak256(abi.encodePacked(block.timestamp, block.prevrandao, msg.sender, eggCounter))) % 100;
+```
+This method combines `block.timestamp`, `block.prevrandao`, `msg.sender`, and `eggCounter` to produce a pseudo-random number. However, both `block.timestamp` and `block.prevrandao` are controlled by miners or validators, making them exploitable. Malicious actors could manipulate these values to influence the randomness in their favor.
+
+**Impact:**
+- **Manipulated Game Outcomes**: Miners or validators can adjust block variables to increase their chances of finding an egg, leading to unfair advantages.
+- **Erosion of Trust**: Players may lose confidence in the game's fairness, affecting user engagement and the contract's reputation.
+
+**Recommended Mitigation:**
+- **Implement Chainlink VRF**: Utilize Chainlink's Verifiable Random Function (VRF) to generate secure and unpredictable random numbers. Chainlink VRF provides cryptographic proofs that ensure the randomness is tamper-proof and verifiable on-chain.
+
+- **Modify `searchForEgg` Function**: Integrate Chainlink VRF into the `searchForEgg` function to request and retrieve random numbers securely. This ensures that the egg-finding mechanism is fair and resistant to manipulation.
+
+By adopting Chainlink VRF, the `EggHuntGame` can enhance its security and provide a trustworthy gaming experience for all participants.
+
+## Medium
+### [M-1] Non-Atomic Deposit Flow in EggHuntGame
+
+**Summary:** The `EggHuntGame.depositEggToVault()` performs an NFT transfer using `transferFrom()` followed by a call to `vault.depositEgg()`. This 2-step process introduces a non-atomic flow that can be front-run or interrupted, and results in the same vulnerability described in the spoofed depositor issue.
+
+**Vulnerability Details:** Using `transferFrom()` followed by a separate `depositEgg()` call exposes the contract to a frontrunning attack. An attacker can monitor the mempool, observe the `transferFrom()` transaction, and quickly call `depositEgg()` before the original owner, registering themselves as the depositor.
+
+This combination of `transferFrom()` + `depositEgg()` replicates the spoofing issue and results in loss of ownership rights.
+
+**Impact:**
+- Race condition between NFT transfer and deposit registration.
+- Users could lose access to their own NFTs.
+- High likelihood of spoofing in public mempool environments.
+
+**Recommended Mitigation:**
+```diff
+/// @notice Allows a player to deposit their egg NFT into the Egg Vault.
+function depositEggToVault(uint256 tokenId) external {
+    require(eggNFT.ownerOf(tokenId) == msg.sender, "Not owner of this egg");
+    // The player must first approve the transfer on the NFT contract.
+-   eggNFT.transferFrom(msg.sender, address(eggVault), tokenId);
+-   eggVault.depositEgg(tokenId, msg.sender);
++   eggNFT.safeTransferFrom(msg.sender, address(eggVault), tokenId);
+}
+```
+- Remove both the `transferFrom()` and external `vault.depositEgg()` calls.
+- Replace with a single `safeTransferFrom()` call.
+- Let the vault handle depositor registration via `onERC721Received()`.
+- This guarantees atomic transfer + tracking, preventing spoofing and frontrunning.
+
+### [M-2] Unauthorized Withdrawals via Poisoned Depositor Mapping
 
 **Summary:** The `EggVault` relies on a mapping `eggDepositors`[tokenId] to authorize NFT withdrawals. This mapping is set via the vulnerable `depositEgg()` function, and can be manipulated by attackers to enable unauthorized withdrawals.
 
@@ -350,96 +395,3 @@ Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 11.38ms (1.64ms CPU
 +   }
 ```
 
-## Medium
-### [M-1] Non-Atomic Deposit Flow in EggHuntGame
-
-**Summary:** The `EggHuntGame.depositEggToVault()` performs an NFT transfer using `transferFrom()` followed by a call to `vault.depositEgg()`. This 2-step process introduces a non-atomic flow that can be front-run or interrupted, and results in the same vulnerability described in the spoofed depositor issue.
-
-**Vulnerability Details:** Using `transferFrom()` followed by a separate `depositEgg()` call exposes the contract to a frontrunning attack. An attacker can monitor the mempool, observe the `transferFrom()` transaction, and quickly call `depositEgg()` before the original owner, registering themselves as the depositor.
-
-This combination of `transferFrom()` + `depositEgg()` replicates the spoofing issue and results in loss of ownership rights.
-
-**Impact:**
-- Race condition between NFT transfer and deposit registration.
-- Users could lose access to their own NFTs.
-- High likelihood of spoofing in public mempool environments.
-
-**Recommended Mitigation:**
-```diff
-/// @notice Allows a player to deposit their egg NFT into the Egg Vault.
-function depositEggToVault(uint256 tokenId) external {
-    require(eggNFT.ownerOf(tokenId) == msg.sender, "Not owner of this egg");
-    // The player must first approve the transfer on the NFT contract.
--   eggNFT.transferFrom(msg.sender, address(eggVault), tokenId);
--   eggVault.depositEgg(tokenId, msg.sender);
-+   eggNFT.safeTransferFrom(msg.sender, address(eggVault), tokenId);
-}
-```
-- Remove both the `transferFrom()` and external `vault.depositEgg()` calls.
-- Replace with a single `safeTransferFrom()` call.
-- Let the vault handle depositor registration via `onERC721Received()`.
-- This guarantees atomic transfer + tracking, preventing spoofing and frontrunning.
-
-### [M-2] Predictable Randomness in `EggHuntGame`
-
-**Summary:** The `EggHuntGame` contract utilizes on-chain data to generate random numbers for the `searchForEgg` function. This approach is susceptible to manipulation by miners or validators, leading to unfair outcomes.
-
-**Vulnerability Details:** In the `searchForEgg` function, randomness is derived using the following line:
-```javascript
-uint256 random = uint256(keccak256(abi.encodePacked(block.timestamp, block.prevrandao, msg.sender, eggCounter))) % 100;
-```
-This method combines `block.timestamp`, `block.prevrandao`, `msg.sender`, and `eggCounter` to produce a pseudo-random number. However, both `block.timestamp` and `block.prevrandao` are controlled by miners or validators, making them exploitable. Malicious actors could manipulate these values to influence the randomness in their favor.
-
-**Impact:**
-- **Manipulated Game Outcomes**: Miners or validators can adjust block variables to increase their chances of finding an egg, leading to unfair advantages.
-- **Erosion of Trust**: Players may lose confidence in the game's fairness, affecting user engagement and the contract's reputation.
-
-**Recommended Mitigation:**
-- **Implement Chainlink VRF**: Utilize Chainlink's Verifiable Random Function (VRF) to generate secure and unpredictable random numbers. Chainlink VRF provides cryptographic proofs that ensure the randomness is tamper-proof and verifiable on-chain.
-
-- **Modify `searchForEgg` Function**: Integrate Chainlink VRF into the `searchForEgg` function to request and retrieve random numbers securely. This ensures that the egg-finding mechanism is fair and resistant to manipulation.
-
-By adopting Chainlink VRF, the `EggHuntGame` can enhance its security and provide a trustworthy gaming experience for all participants.
-
-## Low 
-### [L-1] Lack of Interface Compliance in EggVault
-
-**Summary:** The `EggVault` contract did not implement the `IERC721Receiver` interface, which would prevent it from safely receiving NFTs via `safeTransferFrom()`.
-
-**Vulnerability Details:** Without implementing `onERC721Received()`, the vault will reject all transfers made with `safeTransferFrom()`, causing transactions to revert. This breaks ERC721 compatibility and limits safe integration with wallets and other NFT-aware contracts.
-
-Additionally, without this interface, the vault cannot track who deposited the NFT using the secure `from` parameter. This leads to reliance on insecure external calls such as `depositEgg()`, which are exposed to spoofing and frontrunning attacks.
-
-**Impact:**
-- Deposits using `safeTransferFrom()` will fail.
-- Contracts and wallets cannot safely send NFTs to the vault.
-- Insecure deposit tracking increases attack surface.
-
-**Recommended Mitigation:**
-```diff
-    // SPDX-License-Identifier: SEE LICENSE IN LICENSE
-    pragma solidity ^0.8.23;
-
-    import "@openzeppelin/contracts/access/Ownable.sol";
-    import "./EggstravaganzaNFT.sol";
-+   import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol"
-```
-- Import and implement `IERC721Receiver` in the vault.
-- Handle all depositor registration inside `onERC721Received()`.
-- Test compatibility with `safeTransferFrom()` flows.
-- Eliminate reliance on external deposit functions.
-
-## Informational
-### [I-1] `<Title>&<What it does>`
-
-**Summary:**
-**Impact:**
-**Recommended Mitigation:**
-
-
-## Gas 
-### [G-1] `<Title>&<What it does>`
-
-**Summary:**
-**Impact:**
-**Recommended Mitigation:**
